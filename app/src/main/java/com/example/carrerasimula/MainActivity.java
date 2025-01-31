@@ -20,7 +20,6 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -29,6 +28,7 @@ public class MainActivity extends AppCompatActivity {
     EditText edtCorredores, edtDistancia;
     Button btnIniciar;
     TextView txvResults;
+    RequestQueue requestQueue;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,6 +39,8 @@ public class MainActivity extends AppCompatActivity {
         edtDistancia = findViewById(R.id.txtDistancia);
         btnIniciar = findViewById(R.id.btnComenzar);
         txvResults = findViewById(R.id.txtResultado);
+
+        requestQueue = Volley.newRequestQueue(this);
 
         btnIniciar.setOnClickListener(v -> {
             String numCorredores = edtCorredores.getText().toString().trim();
@@ -67,35 +69,54 @@ public class MainActivity extends AppCompatActivity {
                     requestBody,
                     response -> {
                         try {
-                            // Obtener el body como JSON
-                            JSONObject bodyJson = response.getJSONObject("body");
+                            if (response.has("body")) {
+                                JSONObject body = response.getJSONObject("body");
 
-                            JSONObject ganador = bodyJson.getJSONObject("ganador");
-                            JSONArray corredores = bodyJson.getJSONArray("corredores");
+                                if (body.has("ganador") && body.has("corredores")) {
+                                    JSONObject ganador = body.getJSONObject("ganador");
+                                    JSONArray corredores = body.getJSONArray("corredores");
 
-                            // Construcción del mensaje
-                            StringBuilder builder = new StringBuilder();
-                            builder.append("🏆 Ganador: Corredor ").append(ganador.getInt("corredor")).append("\n");
-                            builder.append("Tiempo: ").append(ganador.getString("tiempo")).append(" segundos\n");
-                            builder.append("Velocidad: ").append(ganador.getString("velocidad")).append("\n\n");
-                            builder.append("📊 Resultados de la carrera:\n");
 
-                            for (int i = 0; i < corredores.length(); i++) {
-                                JSONObject corredor = corredores.getJSONObject(i);
-                                builder.append("Corredor ").append(corredor.getInt("corredor")).append(":\n");
-                                builder.append("Tiempo: ").append(corredor.getInt("tiempo")).append(" segundos\n");
-                                builder.append("Velocidad: ").append(corredor.getString("velocidad")).append("\n\n");
+                                    StringBuilder builder = new StringBuilder();
+                                    builder.append("🏆 Ganador: Corredor ").append(ganador.getInt("corredor")).append("\n");
+                                    builder.append("Tiempo: ").append(ganador.getString("tiempo")).append(" segundos\n");
+                                    builder.append("Velocidad: ").append(ganador.getString("velocidad")).append("\n\n");
+                                    builder.append("📊 Resultados de la carrera:\n");
+
+                                    for (int i = 0; i < corredores.length(); i++) {
+                                        JSONObject corredor = corredores.getJSONObject(i);
+                                        builder.append("Corredor ").append(corredor.getInt("corredor")).append(":\n");
+                                        builder.append("Tiempo: ").append(corredor.getString("tiempo")).append(" segundos\n");
+                                        builder.append("Velocidad: ").append(corredor.getString("velocidad")).append("\n\n");
+                                    }
+
+                                    
+                                    txvResults.setText(builder.toString());
+                                } else {
+                                    Toast.makeText(getApplicationContext(), "Formato de respuesta incorrecto", Toast.LENGTH_SHORT).show();
+                                }
+                            } else {
+                                Toast.makeText(getApplicationContext(), "Respuesta sin cuerpo válido", Toast.LENGTH_SHORT).show();
                             }
-
-                            // Mostrar en el TextView
-                            txvResults.setText(builder.toString());
 
                         } catch (JSONException e) {
                             e.printStackTrace();
                             Toast.makeText(getApplicationContext(), "Error procesando los datos", Toast.LENGTH_SHORT).show();
                         }
                     },
-                    error -> Toast.makeText(getApplicationContext(), "Error en la solicitud: " + error.toString(), Toast.LENGTH_SHORT).show()
+                    error -> {
+                        String errorMsg = "Error en la solicitud: " + error.toString();
+                        if (error.networkResponse != null) {
+                            errorMsg += " Código: " + error.networkResponse.statusCode;
+                            try {
+                                String responseBody = new String(error.networkResponse.data, "utf-8");
+                                errorMsg += "\nRespuesta del servidor: " + responseBody;
+                            } catch (Exception e) {
+                                errorMsg += "\nNo se pudo leer la respuesta.";
+                            }
+                        }
+                        Toast.makeText(getApplicationContext(), errorMsg, Toast.LENGTH_LONG).show();
+                    }
             ) {
                 @Override
                 public Map<String, String> getHeaders() throws AuthFailureError {
@@ -105,7 +126,6 @@ public class MainActivity extends AppCompatActivity {
                 }
             };
 
-            RequestQueue requestQueue = Volley.newRequestQueue(this);
             requestQueue.add(jsonObjectRequest);
 
         } catch (JSONException e) {
@@ -113,4 +133,5 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "Error al crear la solicitud", Toast.LENGTH_SHORT).show();
         }
     }
+
 }
